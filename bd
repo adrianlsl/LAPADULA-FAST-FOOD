@@ -1,0 +1,379 @@
+USE MASTER
+GO
+
+IF DB_ID('BD_LAPADULA') IS NOT NULL
+DROP DATABASE BD_LAPADULA
+GO
+
+CREATE DATABASE BD_LAPADULA
+GO
+
+USE BD_LAPADULA
+GO
+
+/*******************************
+			 Tablas
+********************************/
+
+CREATE TABLE TB_USUARIO(
+IdUsuario int primary key identity,
+Nombres varchar(30),
+Apellidos varchar(30),
+Correo varchar(50),
+Contrasena varchar(25),
+EsAdministrador bit,
+Activo bit default 1,
+FechaRegistro datetime default getdate()
+)
+GO
+select*from TB_USUARIO;
+
+CREATE TABLE TB_CATEGORIA(
+IdCategoria int primary key identity,
+Descripcion varchar(100),
+Activo bit default 1,
+FechaRegistro datetime default getdate()
+)
+GO
+
+select*from TB_CATEGORIA;
+
+CREATE TABLE TB_MARCA(
+IdMarca int primary key identity,
+Descripcion varchar(100),
+Activo bit default 1,
+FechaRegistro datetime default getdate()
+)
+GO
+
+select*from TB_MARCA;
+insert into TB_MARCA (Descripcion) values ('Lapadula Fast Food');
+
+CREATE TABLE TB_PRODUCTO(
+IdProducto int primary key identity,
+Nombre varchar(50),
+Descripcion varchar(100),
+IdMarca int references TB_MARCA(IdMarca),
+IdCategoria int references TB_CATEGORIA(IdCategoria),
+Precio decimal(10,2) default 0,
+Stock int,
+RutaImagen varchar(100),
+Activo bit default 1,
+FechaRegistro datetime default getdate()
+)
+GO
+
+
+select*from TB_PRODUCTO;
+
+CREATE TABLE TB_CARRITO(
+IdCarrito int primary key identity,
+IdUsuario int references TB_USUARIO(IdUsuario),
+IdProducto int references TB_PRODUCTO(IdProducto)
+)
+GO
+
+CREATE TABLE TB_COMPRA(
+IdCompra int primary key identity,
+IdUsuario int references TB_USUARIO(IdUsuario),
+TotalProducto int,
+Total decimal(10,2),
+Contacto varchar(50),
+Telefono varchar(50),
+Direccion varchar(500),
+IdDistrito varchar(10),
+FechaCompra datetime default getdate()
+)
+GO
+
+CREATE TABLE TB_DETALLE_COMPRA(
+IdDetalleCompra int primary key identity,
+IdCompra int references TB_COMPRA(IdCompra),
+IdProducto int references TB_PRODUCTO(IdProducto),
+Cantidad int,
+Total decimal(10,2)
+)
+GO
+
+CREATE TABLE DEPARTAMENTO (
+  IdDepartamento varchar(2) NOT NULL,
+  Descripcion varchar(45) NOT NULL
+) 
+GO
+
+CREATE TABLE PROVINCIA (
+  IdProvincia varchar(4) NOT NULL,
+  Descripcion varchar(45) NOT NULL,
+  IdDepartamento varchar(2) NOT NULL
+) 
+GO
+
+CREATE TABLE DISTRITO (
+  IdDistrito varchar(6) NOT NULL,
+  Descripcion varchar(45) NOT NULL,
+  IdProvincia varchar(4) NOT NULL,
+  IdDepartamento varchar(2) NOT NULL
+)
+GO
+
+/*******************************
+		  Procedimientos
+********************************/
+
+CREATE PROC SP_RegistrarUsuario(
+@Nombres varchar(30),
+@Apellidos varchar(30),
+@Correo varchar(50),
+@Contrasena varchar(25),
+@EsAdministrador bit,
+@Resultado int output
+)
+AS
+BEGIN
+	SET @Resultado = 0
+	IF NOT EXISTS (SELECT * FROM TB_USUARIO WHERE Correo = @Correo)
+	BEGIN
+	INSERT INTO TB_USUARIO(Nombres,Apellidos,Correo,Contrasena,EsAdministrador) VALUES
+	(@Nombres,@Apellidos,@Correo,@Contrasena,@EsAdministrador)
+	SET @Resultado = scope_identity()
+	END
+END
+GO
+
+CREATE PROC SP_ObtenerUsuario(
+@Correo varchar(50),
+@Contrasena varchar(25)
+)
+AS
+BEGIN
+	IF EXISTS (SELECT * FROM TB_USUARIO WHERE correo = @Correo and contrasena = @Contrasena)
+	BEGIN
+	SELECT IdUsuario,Nombres,Apellidos,Correo,Contrasena,EsAdministrador FROM TB_USUARIO WHERE correo = @Correo and contrasena = @Contrasena
+	END
+END
+GO
+
+CREATE PROC SP_RegistrarCategoria(
+@Descripcion varchar(100),
+@Resultado bit output
+)AS
+BEGIN
+	SET @Resultado = 1
+	IF NOT EXISTS (SELECT * FROM TB_CATEGORIA WHERE Descripcion = @Descripcion)
+	INSERT INTO TB_CATEGORIA(Descripcion) values (
+	@Descripcion
+	)
+	ELSE 
+	SET @Resultado = 0
+END 
+GO
+
+CREATE PROC SP_ObtenerCategoria
+AS
+BEGIN	
+SELECT * FROM TB_CATEGORIA
+END
+GO
+
+CREATE PROC SP_EditarCategoria(
+@IdCategoria int,
+@Descripcion varchar(50),
+@Activo bit,
+@Resultado bit output
+)
+AS
+BEGIN
+	SET @Resultado = 1
+	IF NOT EXISTS (SELECT * FROM TB_CATEGORIA WHERE Descripcion = @Descripcion and IdCategoria != @IdCategoria)
+	UPDATE TB_CATEGORIA SET
+	Descripcion = @Descripcion,
+	Activo = @Activo
+	WHERE IdCategoria = @IdCategoria
+	ELSE 
+	SET @Resultado = 0
+END 
+GO
+	
+CREATE PROC SP_RegistrarProducto(
+@Nombre varchar(50),
+@Descripcion varchar(100),
+@IdMarca int,
+@IdCategoria int,
+@Precio decimal(10,2),
+@Stock int,
+@RutaImagen varchar(500),
+@Resultado int output
+)
+AS
+BEGIN
+	SET @Resultado = 0
+	IF NOT EXISTS (SELECT * FROM TB_PRODUCTO WHERE Descripcion = @Descripcion)
+	BEGIN
+	INSERT INTO TB_PRODUCTO(Nombre,Descripcion,IdMarca,IdCategoria,Precio,Stock,RutaImagen) VALUES (		@Nombre,@Descripcion,@IdMarca,@IdCategoria,@Precio,@Stock,@RutaImagen)
+	SET @Resultado = SCOPE_IDENTITY()
+	END
+END
+GO
+
+
+CREATE PROC SP_ObtenerProducto
+AS
+BEGIN
+SELECT P.*,M.Descripcion[DescripcionMarca], C.Descripcion[DescripcionCategoria] FROM TB_PRODUCTO P
+INNER JOIN TB_MARCA M ON M.IdMarca = P.IdMarca
+INNER JOIN TB_CATEGORIA C ON C.IdCategoria = P.IdCategoria
+END
+GO
+
+CREATE PROC SP_EditarProducto(
+@IdProducto int,
+@Nombre varchar(50),
+@Descripcion varchar(100),
+@IdMarca int,
+@IdCategoria int,
+@Precio decimal(10,2),
+@Stock int,
+@Activo bit,
+@Resultado bit output
+)
+AS
+BEGIN
+	SET @Resultado = 0
+	IF NOT EXISTS (SELECT * FROM TB_PRODUCTO WHERE Descripcion = @Descripcion AND IdProducto != @IdProducto)
+	BEGIN
+		UPDATE TB_PRODUCTO SET 
+		Nombre = @Nombre,
+		Descripcion = @Descripcion,
+		IdMarca = @IdMarca,
+		IdCategoria = @IdCategoria,
+		Precio = @Precio,
+		Stock = @Stock,
+		Activo = @Activo WHERE IdProducto = @IdProducto
+		SET @Resultado = 1
+	END
+END
+GO
+
+CREATE PROC SP_ActualizarRutaImagen(
+@IdProducto int,
+@RutaImagen varchar (500)
+)
+AS
+BEGIN
+	UPDATE TB_PRODUCTO SET RutaImagen = @RutaImagen WHERE IdProducto = @IdProducto
+END
+GO
+
+CREATE PROC SP_InsertarCarrito(
+@IdUsuario int,
+@IdProducto int,
+@Resultado int output
+)
+AS
+BEGIN
+	SET @Resultado = 0
+	IF NOT EXISTS (SELECT * FROM TB_CARRITO WHERE IdProducto = @IdProducto AND IdUsuario = @IdUsuario)
+	BEGIN
+		UPDATE TB_PRODUCTO SET Stock = Stock -1 WHERE IdProducto = @IdProducto
+		INSERT INTO TB_CARRITO (IdUsuario,IdProducto) VALUES (@IdUsuario,@IdProducto)
+		SET @Resultado = 1
+	END
+END
+GO
+
+CREATE PROC SP_ObtenerCarrito(
+@IdUsuario int
+)
+AS
+BEGIN
+	SELECT C.IdCarrito, P.IdProducto, M.Descripcion, P.Nombre, P.Precio, P.RutaImagen FROM TB_CARRITO C
+	INNER JOIN TB_PRODUCTO P ON P.IdProducto = C.IdProducto
+	INNER JOIN TB_MARCA M ON M.IdMarca = P.IdMarca
+	WHERE C.IdUsuario = @IdUsuario
+END
+GO
+
+CREATE PROC SP_RegistrarCompra(
+@IdUsuario int,
+@TotalProducto int,
+@Total decimal(10,2),
+@Contacto varchar(50),
+@Telefono varchar(50),
+@Direccion varchar(500),
+@IdDistrito varchar(10),
+@QueryDetalleCompra nvarchar(max),
+@Resultado bit output
+)
+AS
+BEGIN
+	BEGIN TRY
+		SET @Resultado = 0
+		BEGIN TRANSACTION
+
+		DECLARE @idcompra int = 0
+		INSERT INTO TB_COMPRA(IdUsuario,TotalProducto,Total,Contacto,Telefono,Direccion,IdDistrito) values
+		(@IdUsuario,@TotalProducto,@Total,@Contacto,@Telefono,@Direccion,@IdDistrito)
+
+		SET @idcompra = SCOPE_IDENTITY()
+		SET @QueryDetalleCompra = REPLACE(@QueryDetalleCompra, '�idcompra!',@idcompra)
+
+		EXECUTE sp_executesql @QueryDetalleCompra
+		DELETE FROM TB_CARRITO WHERE IdUsuario = @IdUsuario
+		SET @Resultado = 1
+
+		COMMIT
+		END TRY
+	BEGIN CATCH
+	ROLLBACK
+	SET @Resultado = 0
+	END CATCH
+END
+GO
+
+CREATE PROC SP_ObtenerCompra(
+@IdUsuario int
+)
+AS
+BEGIN
+SELECT C.Total,CONVERT(char(10),C.FechaCompra,103)[Fecha],
+(SELECT M.Descripcion, P.Nombre, P.RutaImagen, DC.Total, DC.Cantidad FROM TB_DETALLE_COMPRA DC
+INNER JOIN TB_PRODUCTO P ON P.IdProducto = DC.IdProducto
+INNER JOIN TB_MARCA M ON M.IdMarca = P.IdMarca
+WHERE DC.IdCompra = C.IdCompra
+FOR XML PATH ('PRODUCTO'),TYPE ) AS 'DETALLE_PRODUCTO'
+FROM TB_COMPRA C
+WHERE C.IdUsuario = @IdUsuario
+FOR XML PATH ('COMPRA'), ROOT ('DATA')
+END
+GO
+/*******************************
+		    Inserts
+********************************/
+
+insert into TB_USUARIO (Nombres,Apellidos,Correo,Contrasena,EsAdministrador) values 
+		('Adri�n','L�zaro','adrianlsl.2310@hotmail.com','adrian',1),		
+		('Anthony','Guizado','anthony@hotmail.com','123456',1);
+go
+
+
+insert into TB_CATEGORIA (Descripcion) values ('Bebidas'),('Comidas');
+
+insert into TB_PRODUCTO (Nombre,Descripcion,IdMarca,IdCategoria,Precio,Stock,RutaImagen) values 
+			('Coca cola','Gaseosa de 1.5 L',1,1,10.0,120,'~/imagenes/productos/coca_cola.png'),
+			('Fanta','Gaseosa de 1.5 L',1,1,11.0,100,'~/imagenes/productos/fanta.png'),
+			('Guarana','Gaseosa de 1.5 L',1,1,10.50,120,'~/imagenes/productos/guarana.png'),
+			('Inca Kola','Gaseosa de 1.5 L',1,1,12.0,120,'~/imagenes/productos/inca_cola.png'),
+			('Pepsi','Gaseosa de 1.5 L',1,1,10.0,80,'~/imagenes/productos/pepsi.png'),
+			('Sprite','Gaseosa de 1.5 L',1,1,11.0,120,'~/imagenes/productos/sprite.png'),
+			('Carne a la parrilla','6 piezas de carne',1,2,30.0,40,'~/imagenes/productos/carne_parrilla.png'),
+			('Hamburguesa clasica','Hamburguesa King Clasica',1,2,20.0,30,'~/imagenes/productos/hambuguesa.png'),
+			('Hamburguesa con chile','Hamburguesa King con chile',1,2,20.0,20,'~/imagenes/productos/hamburguesa_conchile.png'),			
+			('Hamburguesa con Pan negro','Hamburguesa de pan negro',1,2,25.50,40,'~/imagenes/productos/hamburguesa_pannegro.png'),
+			('Hamburguesa + Papas','Hamburguesa con papas',1,2,20.0,30,'~/imagenes/productos/hamburguesa_papas.png'),
+			('Hamburguesa a lo pobre','Hamburguesa de carne con huevo',1,2,30.0,40,'~/imagenes/productos/hamburguesa_pobre.png'),
+			('Nuggets','8 piezas de nuggets',1,2,25.0,30,'~/imagenes/productos/nuggets.png'),
+			('Papas fritas','caja de papas fritas',1,2,10.0,40,'~/imagenes/productos/Papas_fritas.png'),
+			('Perro caliente','Perro caliente clasico',1,2,15.0,30,'~/imagenes/productos/perro_caliente.png'),
+			('Pollo Broaster','3 piezas de pollo broaster con papas',1,2,18.0,40,'~/imagenes/productos/pollo_broaster.png'),
+			('Salchipapa clasica','Salchipapa King Clasica',1,2,10.0,30,'~/imagenes/productos/salchipapa_clasica.png'),
+			('Salchipapa a lo pobre','Salchipapa con huevo',1,2,15.0,30,'~/imagenes/productos/salchipapa_pobre.png');
